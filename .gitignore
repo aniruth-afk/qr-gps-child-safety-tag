@@ -1,0 +1,31 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Sensitive files and local data
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+*.p12
+*.pfx
+instance/
+__pycache__/
+*.pyc
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+venv/
+.venv/
+coverage/

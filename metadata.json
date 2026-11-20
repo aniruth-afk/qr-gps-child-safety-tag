@@ -1,0 +1,6 @@
+{
+  "name": "QR-GPS Child Safety Tag",
+  "description": "Smart child safety monitoring system combining dynamic QR identification, live ESP32 GPS tracking, geofencing, route-deviation detection, and instant SOS alerts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
