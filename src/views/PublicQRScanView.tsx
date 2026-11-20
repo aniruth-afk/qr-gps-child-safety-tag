@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -10,6 +10,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { apiUrl, readApiJson } from '../lib/api';
 
 type ScanResult = {
   valid?: boolean;
@@ -60,10 +61,10 @@ export const PublicQRScanView: React.FC = () => {
 
       try {
         const response = await fetch(
-          `/api/qr/scan/${encodeURIComponent(token)}`
+          apiUrl(`/api/qr/scan/${encodeURIComponent(token)}`)
         );
 
-        const data: ScanResult = await response.json();
+        const data: ScanResult = await readApiJson<ScanResult>(response);
 
         if (cancelled) return;
 

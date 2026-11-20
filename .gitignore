@@ -6,26 +6,17 @@ coverage/
 *.log
 .env*
 !.env.example
-
-# Sensitive files and local data
-.env
-.env.*
-!.env.example
-*.db
-*.sqlite
-*.sqlite3
-*.pem
-*.key
-*.p12
-*.pfx
-instance/
-__pycache__/
-*.pyc
-
-# Dependencies and build output
-node_modules/
-dist/
-build/
+# Python virtual environments
 venv/
 .venv/
-coverage/
+backend/venv/
+# Python generated files
+__pycache__/
+*.py[cod]
+*.pyo
+# Test and tool caches
+.pytest_cache/
+.mypy_cache/
+backend/instance/
+*.backup-*
+*.bak

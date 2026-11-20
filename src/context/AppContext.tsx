@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { apiUrl, readApiJson } from '../lib/api';
 import {
   User,
   Child,
@@ -235,12 +236,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const selectedChild = childrenList.find((c) => c.id === selectedChildId) || childrenList[0];
 
   const login = async (email: string, password: string) => {
-    const response = await fetch('/api/auth/login', {
+    const response = await fetch(apiUrl('/api/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    const data = await response.json();
+    const data = await readApiJson<any>(response);
     if (!response.ok || !data.token || !data.user) {
       throw new Error(data.error || 'Unable to sign in. Check your credentials.');
     }
