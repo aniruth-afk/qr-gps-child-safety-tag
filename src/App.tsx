@@ -1,9 +1,9 @@
-/**
+﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navigation/Navbar';
 import { Sidebar, NAV_ITEMS } from './components/Navigation/Sidebar';
@@ -23,8 +23,32 @@ import { LoginView } from './views/LoginView';
 import { Menu, X, ShieldAlert } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
-  const { activeNavTab, setActiveNavTab, unresolvedAlertCount } = useApp();
+  const { activeNavTab, setActiveNavTab, unresolvedAlertCount, setScannedTokenForPublicView } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const openQrFromUrl = () => {
+      const hash = window.location.hash;
+
+      if (!hash.startsWith('#scan')) return;
+
+      const queryStart = hash.indexOf('?');
+      if (queryStart < 0) return;
+
+      const params = new URLSearchParams(hash.slice(queryStart + 1));
+      const token = params.get('token');
+
+      if (token) {
+        setScannedTokenForPublicView(token);
+        setActiveNavTab('public_qr_scan');
+      }
+    };
+
+    openQrFromUrl();
+    window.addEventListener('hashchange', openQrFromUrl);
+
+    return () => window.removeEventListener('hashchange', openQrFromUrl);
+  }, [setScannedTokenForPublicView, setActiveNavTab]);
 
   const renderActiveView = () => {
     switch (activeNavTab) {
@@ -58,6 +82,14 @@ const MainAppContent: React.FC = () => {
         return <DashboardView />;
     }
   };
+
+  if (activeNavTab === 'public_qr_scan') {
+    return (
+      <div className="min-h-screen bg-gray-50 text-gray-900">
+        <PublicQRScanView />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F3F4F6] flex flex-col text-[#111827]">
@@ -131,7 +163,7 @@ const MainAppContent: React.FC = () => {
       <footer className="bg-white border-t border-[#E5E7EB] py-3 px-4 text-center text-xs text-gray-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>
-            <strong>QR-GPS Child Safety Tag</strong> • Student Engineering Capstone Prototype
+            <strong>QR-GPS Child Safety Tag</strong> â€¢ Student Engineering Capstone Prototype
           </span>
           <span className="text-[11px] text-gray-400">
             ESP32 Microcontroller + u-blox NEO-6M GPS + Dynamic QR Privacy Architecture
@@ -149,3 +181,4 @@ export default function App() {
     </AppProvider>
   );
 }
+
