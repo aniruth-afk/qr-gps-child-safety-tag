@@ -472,6 +472,34 @@ def init_seed_db():
 # ==============================================================================
 with app.app_context():
     db.create_all()
+
+    # Create one production Guardian account from temporary Render variables.
+    guardian_email = os.environ.get('CREATE_GUARDIAN_EMAIL', '').strip().lower()
+    guardian_name = os.environ.get('CREATE_GUARDIAN_NAME', '').strip()
+    guardian_phone = os.environ.get('CREATE_GUARDIAN_PHONE', '').strip()
+    guardian_password = os.environ.get('CREATE_GUARDIAN_PASSWORD', '')
+
+    if all([guardian_email, guardian_name, guardian_phone, guardian_password]):
+        if len(guardian_password) < 12:
+            raise RuntimeError('CREATE_GUARDIAN_PASSWORD must be at least 12 characters.')
+
+        existing_guardian = User.query.filter_by(email=guardian_email).first()
+
+        if existing_guardian is None:
+            new_guardian = User(
+                id=str(uuid.uuid4()),
+                email=guardian_email,
+                password_hash=generate_password_hash(guardian_password),
+                role='guardian',
+                name=guardian_name,
+                phone=guardian_phone
+            )
+            db.session.add(new_guardian)
+            db.session.commit()
+            print('[ACCOUNT SETUP] Production Guardian account created.')
+        else:
+            print('[ACCOUNT SETUP] Email already exists; no account changes made.')
+
 if __name__ == '__main__':
     with app.app_context():
         init_seed_db()
