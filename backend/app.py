@@ -1,4 +1,4 @@
-﻿"""
+"""
 QR-GPS Child Safety Tag - Python Flask REST API & SQLite Backend
 Author: Student Capstone IoT Project
 Description:
@@ -219,6 +219,97 @@ def login():
             'assignedChildIds': assigned_child_ids
         }
     }), 200
+
+
+
+# ----------------- CHILD PROFILE MANAGEMENT -----------------
+
+def _child_payload(child):
+    return {
+        'id': child.id,
+        'name': child.name,
+        'age': child.age,
+        'bloodGroup': child.blood_group or 'O+',
+        'guardianName': child.guardian_name,
+        'guardianPhone': child.guardian_phone,
+        'emergencyContactAlt': child.emergency_contact_alt or '',
+        'schoolName': child.school_name or '',
+        'deviceId': child.device_id,
+        'safeZoneRadiusMeters': child.safe_zone_radius_meters or 250,
+        'homeLat': child.home_lat,
+        'homeLng': child.home_lng,
+        'homeAddressName': '',
+        'schoolLat': child.home_lat,
+        'schoolLng': child.home_lng,
+        'qrToken': child.qr_token,
+        'qrCreatedAt': child.created_at.isoformat() if child.created_at else datetime.now(timezone.utc).isoformat(),
+        'qrRevoked': bool(child.qr_revoked),
+        'notes': child.notes or ''
+    }
+
+@app.route('/api/children', methods=['GET'])
+@token_required
+def get_children():
+    if g.current_user.role == 'admin':
+        records = Child.query.order_by(Child.created_at.asc()).all()
+    else:
+        records = Child.query.filter_by(guardian_id=g.current_user.id).order_by(Child.created_at.asc()).all()
+    return jsonify({'children': [_child_payload(child) for child in records]}), 200
+
+@app.route('/api/children', methods=['POST'])
+@token_required
+def create_child():
+    if g.current_user.role != 'guardian':
+        return jsonify({'error': 'Only guardian accounts can register child profiles'}), 403
+    data = request.get_json() or {}
+
+    name = str(data.get('name') or '').strip()
+    guardian_name = str(data.get('guardianName') or g.current_user.name).strip()
+    guardian_phone = str(data.get('guardianPhone') or g.current_user.phone).strip()
+    device_id = str(data.get('deviceId') or '').strip().upper()
+    try:
+        age = int(data.get('age'))
+        radius = int(data.get('safeZoneRadiusMeters', 250))
+        home_lat = float(data.get('homeLat'))
+        home_lng = float(data.get('homeLng'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Age, safe-zone radius, and home coordinates must be valid numbers'}), 400
+
+    if not name or not guardian_name or not guardian_phone or not device_id:
+        return jsonify({'error': 'Child name, guardian name, guardian phone, and device ID are required'}), 400
+    if age < 1 or age > 18:
+        return jsonify({'error': 'Age must be between 1 and 18'}), 400
+    if radius < 25 or radius > 10000:
+        return jsonify({'error': 'Safe-zone radius must be between 25 and 10000 meters'}), 400
+    if not (-90 <= home_lat <= 90 and -180 <= home_lng <= 180):
+        return jsonify({'error': 'Home coordinates are outside valid ranges'}), 400
+    if Child.query.filter_by(device_id=device_id).first():
+        return jsonify({'error': 'This device ID is already registered'}), 409
+
+    token = f"TAG-{secrets.token_hex(4).upper()}-{secrets.token_hex(4).upper()}"
+    while Child.query.filter_by(qr_token=token).first():
+        token = f"TAG-{secrets.token_hex(4).upper()}-{secrets.token_hex(4).upper()}"
+
+    child = Child(
+        name=name,
+        age=age,
+        blood_group=str(data.get('bloodGroup') or 'O+').strip(),
+        guardian_id=g.current_user.id,
+        guardian_name=guardian_name,
+        guardian_phone=guardian_phone,
+        emergency_contact_alt=str(data.get('emergencyContactAlt') or '').strip() or None,
+        school_name=str(data.get('schoolName') or '').strip() or None,
+        device_id=device_id,
+        safe_zone_radius_meters=radius,
+        home_lat=home_lat,
+        home_lng=home_lng,
+        qr_token=token,
+        qr_revoked=False,
+        notes=str(data.get('notes') or '').strip() or None
+    )
+    db.session.add(child)
+    db.session.commit()
+    return jsonify({'status': 'created', 'child': _child_payload(child)}), 201
 
 # ----------------- GPS INGESTION (FROM ESP32) -----------------
 

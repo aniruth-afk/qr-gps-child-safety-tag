@@ -78,22 +78,25 @@ export const ChildProfileView: React.FC = () => {
     setFormErrors({});
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
-    if (editingChildId) {
-      updateChild(editingChildId, formData);
-      setSuccessMessage('Child profile updated successfully.');
-      setEditingChildId(null);
-    } else {
-      const newChild = registerChild(formData);
-      setSelectedChildId(newChild.id);
-      setSuccessMessage(`Child "${newChild.name}" registered successfully with Device ID: ${newChild.deviceId}.`);
-      setIsRegistering(false);
+    try {
+      if (editingChildId) {
+        updateChild(editingChildId, formData);
+        setSuccessMessage('Child profile updated successfully.');
+        setEditingChildId(null);
+      } else {
+        const newChild = await registerChild(formData);
+        setSelectedChildId(newChild.id);
+        setSuccessMessage(`Child "${newChild.name}" registered successfully with Device ID: ${newChild.deviceId}.`);
+        setIsRegistering(false);
+      }
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to save child profile.');
     }
-
-    setTimeout(() => setSuccessMessage(null), 4000);
   };
 
   const startEdit = (child: Child) => {

@@ -48,7 +48,7 @@ interface AppContextType {
   selectedChildId: string;
   setSelectedChildId: (id: string) => void;
   selectedChild: Child | undefined;
-  registerChild: (child: Omit<Child, 'id' | 'qrToken' | 'qrCreatedAt' | 'qrRevoked'>) => Child;
+  registerChild: (child: Omit<Child, 'id' | 'qrToken' | 'qrCreatedAt' | 'qrRevoked'>) => Promise<Child>;
   updateChild: (id: string, updates: Partial<Child>) => void;
 
   // GPS & Live Tracking
@@ -107,8 +107,8 @@ interface AppContextType {
   addReferenceLocation: (loc: Omit<ReferenceLocation, 'id'>) => void;
 
   // Dynamic QR
-  revokeQrToken: (childId: string) => boolean;
-  regenerateQrToken: (childId: string) => string;
+  revokeQrToken: (childId: string) => Promise<boolean>;
+  regenerateQrToken: (childId: string) => Promise<string>;
   validateQrToken: (token: string) => {
     valid: boolean;
     child?: Child;
@@ -250,9 +250,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCurrentUser(user);
     sessionStorage.setItem('qrgps_auth_token', data.token as string);
     sessionStorage.setItem('qrgps_auth_user', JSON.stringify(user));
-    if (user.role === 'guardian' && user.assignedChildIds?.length > 0) {
-      setSelectedChildId(user.assignedChildIds[0]);
+    setSystemMode('real');
+    const childrenResponse = await fetch(apiUrl('/api/children'), {
+      headers: { Authorization: `Bearer ${data.token}` },
+    });
+    const childrenData = await readApiJson<any>(childrenResponse);
+    if (!childrenResponse.ok) {
+      throw new Error(childrenData.error || 'Unable to load registered child profiles.');
     }
+    const serverChildren = ((childrenData.children || []) as Child[]).map((child) => {
+      const cached = childrenList.find((item) => item.id === child.id);
+      return {
+        ...cached,
+        ...child,
+        homeAddressName: cached?.homeAddressName || '',
+        schoolLat: cached?.schoolLat ?? child.schoolLat,
+        schoolLng: cached?.schoolLng ?? child.schoolLng,
+      };
+    });
+    setChildrenList(serverChildren);
+    if (serverChildren.length > 0) setSelectedChildId(serverChildren[0].id);
   };
 
   const logout = () => {
@@ -566,27 +583,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // QR dynamic token lifecycle
-  const revokeQrToken = (childId: string): boolean => {
-    setChildrenList((prev) =>
-      prev.map((c) => (c.id === childId ? { ...c, qrRevoked: true } : c))
-    );
+  const revokeQrToken = async (childId: string): Promise<boolean> => {
+    if (systemMode === 'real') {
+      if (!authToken) throw new Error('Please sign in again to manage this QR tag.');
+      const response = await fetch(apiUrl('/api/qr/revoke'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ child_id: childId }),
+      });
+      const data = await readApiJson<any>(response);
+      if (!response.ok) throw new Error(data.error || 'Unable to revoke QR tag.');
+    }
+    setChildrenList((prev) => prev.map((c) => c.id === childId ? { ...c, qrRevoked: true } : c));
     return true;
   };
 
-  const regenerateQrToken = (childId: string): string => {
-    const newToken = generateOpaqueToken();
-    setChildrenList((prev) =>
-      prev.map((c) =>
-        c.id === childId
-          ? {
-              ...c,
-              qrToken: newToken,
-              qrCreatedAt: new Date().toISOString(),
-              qrRevoked: false,
-            }
-          : c
-      )
-    );
+  const regenerateQrToken = async (childId: string): Promise<string> => {
+    let newToken: string;
+    if (systemMode === 'real') {
+      if (!authToken) throw new Error('Please sign in again to manage this QR tag.');
+      const response = await fetch(apiUrl('/api/qr/regenerate'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ child_id: childId }),
+      });
+      const data = await readApiJson<any>(response);
+      if (!response.ok || !data.new_token) throw new Error(data.error || 'Unable to regenerate QR tag.');
+      newToken = data.new_token as string;
+    } else {
+      newToken = generateOpaqueToken();
+    }
+    setChildrenList((prev) => prev.map((c) => c.id === childId
+      ? { ...c, qrToken: newToken, qrCreatedAt: new Date().toISOString(), qrRevoked: false }
+      : c));
     return newToken;
   };
 
@@ -602,7 +631,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Children Management
-  const registerChild = (childData: Omit<Child, 'id' | 'qrToken' | 'qrCreatedAt' | 'qrRevoked'>): Child => {
+  const registerChild = async (childData: Omit<Child, 'id' | 'qrToken' | 'qrCreatedAt' | 'qrRevoked'>): Promise<Child> => {
+    if (systemMode === 'real') {
+      if (!authToken) throw new Error('Please sign in before registering a child in Real Mode.');
+      const response = await fetch(apiUrl('/api/children'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify(childData),
+      });
+      const data = await readApiJson<any>(response);
+      if (!response.ok || !data.child?.id || !data.child?.qrToken) throw new Error(data.error || 'Unable to register child.');
+      const newChild: Child = {
+        ...childData,
+        ...(data.child as Partial<Child>),
+        id: data.child.id as string,
+        qrToken: data.child.qrToken as string,
+        homeAddressName: childData.homeAddressName,
+        schoolLat: childData.schoolLat,
+        schoolLng: childData.schoolLng,
+        qrCreatedAt: data.child.qrCreatedAt || new Date().toISOString(),
+        qrRevoked: false,
+      };
+      setChildrenList((prev) => [...prev, newChild]);
+      const newSafeZone: SafeZone = {
+        id: `SZ_${Date.now()}`, childId: newChild.id,
+        name: `${childData.name} Home Safe Zone`,
+        centerLat: childData.homeLat, centerLng: childData.homeLng,
+        radiusMeters: childData.safeZoneRadiusMeters || 200, isActive: true,
+      };
+      setSafeZones((prev) => [...prev, newSafeZone]);
+      return newChild;
+    }
     const newId = `CHILD_${String(childrenList.length + 1).padStart(3, '0')}`;
     const token = generateOpaqueToken();
     const newChild: Child = {

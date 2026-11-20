@@ -88,19 +88,25 @@ export const QRIdentificationView: React.FC = () => {
     window.print();
   };
 
-  const handleRevoke = () => {
-    if (confirm(`Are you sure you want to REVOKE the QR tag for ${selectedChild.name}? Scanners will immediately receive an invalid/expired notice.`)) {
-      revokeQrToken(selectedChild.id);
-      setStatusMessage('QR Tag revoked. It is now deactivated in the cloud database.');
+  const handleRevoke = async () => {
+    if (!confirm(`Are you sure you want to REVOKE the QR tag for ${selectedChild.name}? Scanners will immediately receive an invalid/expired notice.`)) return;
+    try {
+      await revokeQrToken(selectedChild.id);
+      setStatusMessage('QR tag revoked successfully.');
       setTimeout(() => setStatusMessage(null), 4000);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to revoke QR tag.');
     }
   };
 
-  const handleRegenerate = () => {
-    if (confirm(`Generate a brand-new opaque QR identification token for ${selectedChild.name}? You will need to print and replace the physical tag sticker.`)) {
-      const newToken = regenerateQrToken(selectedChild.id);
+  const handleRegenerate = async () => {
+    if (!confirm(`Generate a brand-new opaque QR identification token for ${selectedChild.name}? You will need to print and replace the physical tag sticker.`)) return;
+    try {
+      const newToken = await regenerateQrToken(selectedChild.id);
       setStatusMessage(`New QR token "${newToken}" generated successfully.`);
       setTimeout(() => setStatusMessage(null), 4000);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to regenerate QR tag.');
     }
   };
 
