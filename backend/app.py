@@ -1,4 +1,4 @@
-"""
+﻿"""
 QR-GPS Child Safety Tag - Python Flask REST API & SQLite Backend
 Author: Student Capstone IoT Project
 Description:
@@ -465,7 +465,15 @@ def init_seed_db():
         db.session.commit()
         print("[DATABASE] SQLite database initialized with demonstration seed data.")
 
+# ==============================================================================
+# AUTOMATIC DATABASE SCHEMA INITIALIZATION
+# Creates missing tables when Gunicorn starts on Render.
+# Does not insert demo records or delete existing data.
+# ==============================================================================
+with app.app_context():
+    db.create_all()
 if __name__ == '__main__':
     with app.app_context():
         init_seed_db()
     app.run(host='0.0.0.0', port=5000, debug=True)
+
